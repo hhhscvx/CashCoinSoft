@@ -10,13 +10,15 @@ from fake_useragent import UserAgent
 import asyncio
 import random
 from pyrogram.raw.functions.messages import RequestWebView
+from utils.core import logger
+from utils.core.services import escape_html
 
 
 class CashCoin:
     def __init__(self, thread: int, session_name: str, phone_number: str, proxy: Union[str, None]) -> None:
         self.account = session_name + '.session'
         self.thread = thread
-        self.proxy = f'{config.PROXY['TYPE']['REQUESTS']}://{proxy}' if proxy else None
+        self.proxy = f"{config.PROXY['TYPE']['REQUESTS']}://{proxy}" if proxy else None
         connector = ProxyConnector.from_url(self.proxy) if proxy else aiohttp.TCPConnector(verify_ssl=False)
 
         if proxy:
@@ -34,7 +36,7 @@ class CashCoin:
             api_hash=config.API_HASH,
             workdir=config.WORKDIR,
             proxy=proxy,
-            lang_code='en',
+            lang_code='ru',
         )
 
         headers = {'User-Agent': UserAgent(os='android').random}
@@ -49,7 +51,7 @@ class CashCoin:
         r = await (await self.session.get('https://click.cashcoin.game/api/profile', proxy=self.proxy)).json()
 
         balance = r.get('balance_coins')
-        referral_link = f'https://t.me/cashcoingame_bot/click?startapp={r.get('hash')}'
+        referral_link = f"https://t.me/cashcoingame_bot/click?startapp={r.get('hash')}"
 
         await asyncio.sleep(random.uniform(5, 7))
 
@@ -91,7 +93,36 @@ class CashCoin:
         self.session.headers['Authorization'] = 'Bearer ' + resp.get('access_token')
         return True
 
-    async def get_tg_web_data(self):  # tg_web_data энивей нужна, нужна чтоб получить access_token (Authorization)
+    async def send_taps(self):
+        response_text = ''
+        try:
+            taps_count = random.randint(config.RANDOM_TAPS_COUNT[0], config.RANDOM_TAPS_COUNT[1])
+            tg_web_data = self.get_tg_web_data()
+
+            json_data = {"count": taps_count, "web_app_data": tg_web_data}
+
+            response = await self.session.post('https://click.cashcoin.game/api/click/apply', json_data=json_data)
+            response_text = await response.text()
+            response.raise_for_status()
+
+            player_data = await response.json()
+
+            return player_data
+        except Exception as error:
+            logger.error(f"{self.account} | Unknown error when Tapping: {escape_html(error)} | "
+                         f"Response text: {escape_html(response_text)[:128]}...")
+            await asyncio.sleep(3)
+
+    async def get_tasks(self):
+        resp = await self.session.get('https://click.cashcoin.game/api/bonus')
+        return await resp.json()
+
+    async def complete_task(self, task_name):
+        url = f'https://click.cashcoin.game/api/bonus/{task_name}/apply'
+        resp = await self.session.post(url)
+        return await resp.json()
+
+    async def get_tg_web_data(self):
         try:
             await self.client.connect()
 
