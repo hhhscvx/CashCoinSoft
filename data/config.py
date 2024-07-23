@@ -1,5 +1,10 @@
-API_ID = 1234
-API_HASH = "asdf9876"
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+
+API_ID = int(os.getenv("API_ID"))  # Напишите сюда свой api_id с my.telegram.org
+API_HASH = str(os.getenv("API_HASH"))  # Напишите сюда свой api_hash с my.telegram.org
 
 
 PROXY = {
@@ -11,9 +16,12 @@ PROXY = {
     }
 }
 
+# Выполнять задания при каждом запуске софта (отключите после первого выполнения)
+COMPLETE_TASKS = True
+
 BLACKLIST_TASKS = ['invite-friend']
 
-WORKDIR = "sessoins/"  # куда сохраняются сессии
+WORKDIR = "sessions/"  # куда сохраняются сессии
 
 DELAY_BETWEEN_SWITCH_ACCOUNT = [5, 15]
 DELAY_BETWEEN_TAPS = [10, 25]

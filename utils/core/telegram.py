@@ -24,10 +24,19 @@ class Accounts:
         available_accounts = []
         for session in sessions:
             for saved_accounts in accounts_from_json:
-                if saved_accounts['session'] == session:
+                if saved_accounts['session_name'] == session:
                     available_accounts.append(saved_accounts)
                     break  # Аккаунт к данной сессии найден, ищем следующую
         return available_accounts
+
+    def pars_sessions(self):
+        sessions = []
+        for file in os.listdir(self.workdir):
+            if file.endswith('.session'):
+                sessions.append(file.replace('.session', ''))
+
+        logger.info(f"Searched sessions: {len(sessions)}.")
+        return sessions
 
     async def check_valid_account(self, account: dict):  # проверка коннекта аккаунта
         session_name, phone_number, proxy = account.values()
@@ -44,7 +53,7 @@ class Accounts:
             client = Client(session_name, self.api_id, self.api_hash, workdir=self.workdir,
                             phone_number=phone_number, proxy=proxy_dict)
 
-            connect = asyncio.wait_for(client.connect(), config.CLIENT_CONNECT_TIMEOUT)
+            connect = await asyncio.wait_for(client.connect(), config.CLIENT_CONNECT_TIMEOUT)
 
             if connect:
                 await client.get_me()
@@ -61,7 +70,7 @@ class Accounts:
         for account in accounts:
             tasks.append(asyncio.create_task(self.check_valid_account(account)))
 
-        v_accounts = asyncio.gather(*tasks)
+        v_accounts = await asyncio.gather(*tasks)
 
         valid_accounts = [account for account, is_valid in zip(
             accounts, v_accounts) if is_valid]  # is_valid = check_valid вернул аккаунт
@@ -80,7 +89,7 @@ class Accounts:
         else:
             logger.success(f"Found available accounts: {len(available_accounts)}.")
 
-        valid_accounts, invalid_accounts = self.check_valid_accounts(available_accounts)
+        valid_accounts, invalid_accounts = await self.check_valid_accounts(available_accounts)
 
         if invalid_accounts:
             save_accounts_list_to_file(f'{self.workdir}invalid_accounts.txt', invalid_accounts)
@@ -90,15 +99,6 @@ class Accounts:
             raise ValueError("Have not valid sessions")
         else:
             return valid_accounts
-
-    def pars_sessions(self):
-        sessions = []
-        for file in os.listdir(self.workdir):
-            if file.endswith('.session'):
-                sessions.append(file.replace('.session', ''))
-
-        logger.info(f"Searched sessions: {len(sessions)}.")
-        return sessions
 
     async def create_sessions(self):
         while True:
@@ -119,16 +119,24 @@ class Accounts:
             else:
                 client_proxy, proxy = None, None
 
-            phone_number = (input("Input the phone number of the account: ")).replace(' ', '')
+            phone_number = (input("Input the phone number of the account (Starting with '+'): ")).replace(' ', '')
             phone_number = '+' + phone_number if not phone_number.startswith('+') else phone_number
 
-            client = Client(name=session_name, api_id=self.api_id, api_hash=self.api_hash,
-                            workdir=self.workdir, phone_number=phone_number, proxy=client_proxy, lang_code='ru')
+            client = Client(
+                api_id=self.api_id,
+                api_hash=self.api_hash,
+                name=session_name,
+                workdir=self.workdir,
+                phone_number=phone_number,
+                proxy=client_proxy,
+                lang_code='ru'
+            )
 
             async with client:
                 me = await client.get_me()
+                print(me.username)
 
-            save_to_json(f'{self.workdir}accounts.json', dict_={
+            save_to_json(f'{config.WORKDIR}accounts.json', dict_={
                 "session_name": session_name,
                 "phone_number": phone_number,
                 "proxy": proxy,

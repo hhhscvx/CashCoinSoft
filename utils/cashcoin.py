@@ -45,63 +45,45 @@ class CashCoin:
     async def logout(self):
         await self.session.close()
 
-    async def stats(self):
+    async def get_balance(self):
         await self.login()
 
         r = await (await self.session.get('https://click.cashcoin.game/api/profile', proxy=self.proxy)).json()
 
         balance = r.get('balance_coins')
         referral_link = f"https://t.me/cashcoingame_bot/click?startapp={r.get('hash')}"
-
         await asyncio.sleep(random.uniform(5, 7))
 
-        referrals = 0  # тут должно высчитываться число рефералов (хз где это взять из апи)
-
-        await self.logout()
-        await self.client.connect()
-        me = await self.client.get_me()
-
-        phone_number, name = "'" + me.phone_number, f"{me.first_name} {me.last_name if me.last_name else ''}"
-        await self.client.disconnect()
-
-        proxy = self.proxy.replace('http://', '') if self.proxy else ''
-
-        return [phone_number, name, balance, referrals, referral_link, proxy]
-
-    @staticmethod
-    def iso_to_unix_time(iso_time: str):
-        return int(datetime.fromisoformat(iso_time.replace('Z', '+00:00')).timestamp()) + 1
-
-    @staticmethod
-    def curr_time():
-        return int(time.time())
+        return balance
 
     async def login(self):
         await asyncio.sleep(random.uniform(*config.DELAY_BETWEEN_SWITCH_ACCOUNT))
-        query = self.get_tg_web_data()
+        self.session.headers.pop('Authorization', None)
+        query = await self.get_tg_web_data()
 
         if not query:
             logger.error(f"Thread {self.thread} | {self.account} | Session {self.account} invalid")
+            await self.client.disconnect()
             await self.logout()
             return None
 
         json_data = {'web_app_data': query}
 
-        resp = await self.session.post('https://click.cashcoin.game/api/auth/login', json_data=json_data)
-        resp = await resp.json()
+        resp = await self.session.post('https://click.cashcoin.game/api/auth/login', json=json_data)
+        resp_json = await resp.json()
 
-        self.session.headers['Authorization'] = 'Bearer ' + resp.get('access_token')
+        self.session.headers['Authorization'] = 'Bearer ' + resp_json.get('access_token')
         return True
 
     async def send_taps(self):
         response_text = ''
         try:
             taps_count = random.randint(config.RANDOM_TAPS_COUNT[0], config.RANDOM_TAPS_COUNT[1])
-            tg_web_data = self.get_tg_web_data()
+            tg_web_data = await self.get_tg_web_data()
 
             json_data = {"count": taps_count, "web_app_data": tg_web_data}
 
-            response = await self.session.post('https://click.cashcoin.game/api/click/apply', json_data=json_data)
+            response = await self.session.post('https://click.cashcoin.game/api/click/apply', json=json_data)
             response_text = await response.text()
             response.raise_for_status()
 
@@ -126,24 +108,25 @@ class CashCoin:
         try:
             await self.client.connect()
 
-            peer = self.client.resolve_peer('cashcoingame_bot')
+            await self.client.send_message("cashcoingame_bot", "/start")
+            await asyncio.sleep(2)
 
-            web_view = self.client.invoke(RequestWebView(
-                peer=peer,
-                bot=peer,
+            web_view = await self.client.invoke(RequestWebView(
+                peer=await self.client.resolve_peer('cashcoingame_bot'),
+                bot=await self.client.resolve_peer('cashcoingame_bot'),
                 platform='android',
                 from_bot_menu=False,
                 url='https://click.cashcoin.game/'
             ))
-
+            await self.client.disconnect()
             auth_url = web_view.url
 
             query = unquote(string=unquote(string=auth_url.split('tgWebAppData=')[1].split('&tgWebAppVersion')[0]))
-            query_id = query.split('&query_id=')[1].split('&user')[0]
+            query_id = query.split('query_id=')[1].split('&user')[0] # err
             user = query.split('&user=')[1].split('&auth_date')[0]
             auth_date = query.split('&auth_date=')[1].split('&hash')[0]
             hash_ = query.split('&hash=')[1]
 
             return f'query_id={query_id}&user={user}&auth_date={auth_date}&hash={hash_}'
-        except:
+        except Exception as e:
             return None
