@@ -1,5 +1,3 @@
-from datetime import datetime
-import time
 from typing import Union
 from urllib.parse import unquote
 from data import config
@@ -51,7 +49,6 @@ class CashCoin:
         r = await (await self.session.get('https://click.cashcoin.game/api/profile', proxy=self.proxy)).json()
 
         balance = r.get('balance_coins')
-        referral_link = f"https://t.me/cashcoingame_bot/click?startapp={r.get('hash')}"
         await asyncio.sleep(random.uniform(5, 7))
 
         return balance
@@ -59,6 +56,11 @@ class CashCoin:
     async def login(self):
         await asyncio.sleep(random.uniform(*config.DELAY_BETWEEN_SWITCH_ACCOUNT))
         self.session.headers.pop('Authorization', None)
+
+        await self.client.connect()
+
+        await self.client.send_message("cashcoingame_bot", "/start")
+        await asyncio.sleep(2)
         query = await self.get_tg_web_data()
 
         if not query:
@@ -106,10 +108,11 @@ class CashCoin:
 
     async def get_tg_web_data(self):
         try:
-            await self.client.connect()
 
-            await self.client.send_message("cashcoingame_bot", "/start")
-            await asyncio.sleep(2)
+            try:
+                await self.client.connect()
+            except:  # если клиент уже законнекчен в login
+                ...
 
             web_view = await self.client.invoke(RequestWebView(
                 peer=await self.client.resolve_peer('cashcoingame_bot'),
@@ -122,7 +125,7 @@ class CashCoin:
             auth_url = web_view.url
 
             query = unquote(string=unquote(string=auth_url.split('tgWebAppData=')[1].split('&tgWebAppVersion')[0]))
-            query_id = query.split('query_id=')[1].split('&user')[0] # err
+            query_id = query.split('query_id=')[1].split('&user')[0]  # err
             user = query.split('&user=')[1].split('&auth_date')[0]
             auth_date = query.split('&auth_date=')[1].split('&hash')[0]
             hash_ = query.split('&hash=')[1]

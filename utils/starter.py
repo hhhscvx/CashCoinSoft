@@ -34,7 +34,7 @@ async def start(thread: int, session_name: str, phone_number: str, proxy: Union[
 
                 # TAPS:
                 if time.time() - access_token_create_time >= 3600:
-                    balance = await cashcoin.get_balance()  # login & get_data
+                    balance = await cashcoin.get_balance()
                     access_token_create_time = time.time()
 
                 player_data = await cashcoin.send_taps()
